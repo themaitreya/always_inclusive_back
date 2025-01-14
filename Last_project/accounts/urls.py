@@ -1,5 +1,7 @@
 from django.urls import path
 from . import views
+from .views import ProfileUpdateView
+
 
 app_name = 'accounts'
 urlpatterns = [
@@ -15,9 +17,11 @@ urlpatterns = [
     # path('profile/update/', views.update_profile, name='update_profile'),
     path('api/login/', views.login_api, name='api_login'),
     path('api/logout/', views.logout_api, name='api_logout'),
-    path('api/signup/', views.signup_api, name='api_signup'),
+    path('signup/', views.SignupView.as_view(), name='signup'),
+    # path('api/signup/', views.signup_api, name='api_signup'),
     path('api/profile/', views.profile_api, name='api_profile'),
     path('api/profile/<str:username>/', views.get_user_profile, name='api_user_profile'),
-    path('api/profile/update/', views.update_profile_api, name='api_profile_update'),
+    path('api/profile/<str:username>/update/', ProfileUpdateView.as_view(), name='profile-update'),
+    # path('api/profile/<str:username>/update/', views.update_profile_api, name='api_profile_update'),
 
 ]

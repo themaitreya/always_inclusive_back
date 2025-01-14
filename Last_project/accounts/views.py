@@ -78,6 +78,20 @@ def login_api(request):
         })
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def logout_api(request):
+    if request.user.is_authenticated:
+        # 사용자의 토큰 삭제
+        Token.objects.filter(user=request.user).delete()
+        return Response({
+            "message": "로그아웃되었습니다."
+        }, status=status.HTTP_200_OK)
+    return Response({
+        "message": "이미 로그아웃된 상태입니다."
+    }, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 # def signup(request):

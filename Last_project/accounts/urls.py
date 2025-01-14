@@ -14,6 +14,7 @@ urlpatterns = [
     # path('change-language/', views.change_language, name='change_language'),
     # path('profile/update/', views.update_profile, name='update_profile'),
     path('api/login/', views.login_api, name='api_login'),
+    path('api/logout/', views.logout_api, name='api_logout'),
     path('api/signup/', views.signup_api, name='api_signup'),
     path('api/profile/', views.profile_api, name='api_profile'),
     path('api/profile/<str:username>/', views.get_user_profile, name='api_user_profile'),

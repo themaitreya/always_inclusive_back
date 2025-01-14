@@ -22,33 +22,33 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
 from .serializers import ProfileSerializer
 
-@api_view(['PUT'])
-@authentication_classes([TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def update_profile_api(request):
-    serializer = ProfileUpdateSerializer(request.user, data=request.data, context={'request': request})
-    if serializer.is_valid():
-        serializer.save()
-        return Response({
-            "message": "프로필이 성공적으로 수정되었습니다.",
-            "user": serializer.data
-        })
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+# @api_view(['PUT'])
+# @authentication_classes([TokenAuthentication])
+# @permission_classes([IsAuthenticated])
+# def update_profile_api(request):
+#     serializer = ProfileUpdateSerializer(request.user, data=request.data, context={'request': request})
+#     if serializer.is_valid():
+#         serializer.save()
+#         return Response({
+#             "message": "프로필이 성공적으로 수정되었습니다.",
+#             "user": serializer.data
+#         })
+#     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['GET'])
-@authentication_classes([TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def profile_api(request):
-    serializer = ProfileSerializer(request.user)
-    return Response(serializer.data)
+# @api_view(['GET'])
+# @authentication_classes([TokenAuthentication])
+# @permission_classes([IsAuthenticated])
+# def profile_api(request):
+#     serializer = ProfileSerializer(request.user)
+#     return Response(serializer.data)
 
-@api_view(['GET'])
-@authentication_classes([TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def get_user_profile(request, username):
-    user = get_object_or_404(User, username=username)
-    serializer = ProfileSerializer(user)
-    return Response(serializer.data)
+# @api_view(['GET'])
+# @authentication_classes([TokenAuthentication])
+# @permission_classes([IsAuthenticated])
+# def get_user_profile(request, username):
+#     user = get_object_or_404(User, username=username)
+#     serializer = ProfileSerializer(user)
+#     return Response(serializer.data)
 
 #회원가입DRF
 @api_view(['POST'])

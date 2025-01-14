@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
-from .models import User
+from accounts.models import User
 
 
 class LoginSerializer(serializers.Serializer):
@@ -42,7 +42,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         fields = ('id', 'username', 'email', 'date_joined', 'last_login')
         
 from rest_framework import serializers
-from django.contrib.auth.models import User
+# from django.contrib.auth.models import User
 
 class ProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:

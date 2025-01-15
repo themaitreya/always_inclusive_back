@@ -10,6 +10,23 @@ def user_profile_images_path(instance, filename):
 
 class User(AbstractUser):
     profile_image = models.ImageField(upload_to=user_profile_images_path, blank=True, null=True)
+        
+    GENDER_CHOICES = (
+        ('M', '남성'),
+        ('F', '여성'),
+    )
+    
+    AGE_CHOICES = (
+        ('10S', '10대'),
+        ('20S', '20대'),
+        ('30S', '30대'),
+        ('40S', '40대'),
+        ('50S', '50대'),
+        ('60P', '60대 이상'),
+    )
+
+    gender = models.CharField(max_length=1, choices=GENDER_CHOICES, default='M')
+    age_group = models.CharField(max_length=3, choices=AGE_CHOICES, default='30')
 
     def __str__(self):
         return self.username

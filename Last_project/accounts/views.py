@@ -17,10 +17,42 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework.authtoken.models import Token
-from .serializers import LoginSerializer, SignupSerializer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import TokenAuthentication
-from .serializers import ProfileSerializer
+from rest_framework import generics
+from .serializers import LoginSerializer, SignupSerializer
+from .serializers import ProfileSerializer, ProfileUpdateSerializer
+from .models import User
+
+
+# 2차수정 회원가입 클래스
+class SignupView(generics.CreateAPIView):
+    queryset = User.objects.all()
+    serializer_class = SignupSerializer
+    permission_classes = [AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        # 회원가입 시 자동 토큰 발급
+        token, created = Token.objects.get_or_create(user=user)
+
+        return Response({
+            'user': ProfileSerializer(user).data,
+            'token': token.key
+        }, status=status.HTTP_201_CREATED)
+# 2차수정 프로필 업데이트 클래스
+class ProfileUpdateView(generics.UpdateAPIView):
+    serializer_class = ProfileUpdateSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_field = 'username'
+    queryset = User.objects.all()
+
+    def get_object(self):
+        username = self.kwargs['username']
+        return User.objects.get(username=username)
+
 
 # @api_view(['PUT'])
 # @authentication_classes([TokenAuthentication])
@@ -50,20 +82,20 @@ from .serializers import ProfileSerializer
 #     serializer = ProfileSerializer(user)
 #     return Response(serializer.data)
 
-#회원가입DRF
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def signup_api(request):
-    serializer = SignupSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response({
-            "message": "회원가입이 완료되었습니다.",
-            "user": serializer.data
-        }, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+# 1차수정 회원가입DRF
+# @api_view(['POST'])
+# @permission_classes([AllowAny])
+# def signup_api(request):
+#     serializer = SignupSerializer(data=request.data)
+#     if serializer.is_valid():
+#         serializer.save()
+#         return Response({
+#             "message": "회원가입이 완료되었습니다.",
+#             "user": serializer.data
+#         }, status=status.HTTP_201_CREATED)
+#     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-#로그인DRF
+# 2차수정 로그인DRF
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login_api(request):
@@ -74,9 +106,42 @@ def login_api(request):
         return Response({
             'token': token.key,
             'user_id': user.pk,
-            'username': user.username
+            'username': user.username,
+            'email': user.email,
+            'profile_url': f'/accounts/profile/{user.username}/',  # 프로필 URL 추가
+            'redirect_to': '/accounts/profile/'  # 프론트엔드에서 리다이렉트할 URL
         })
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+#1차수정 로그인DRF
+# @api_view(['POST'])
+# @permission_classes([AllowAny])
+# def login_api(request):
+#     serializer = LoginSerializer(data=request.data)
+#     if serializer.is_valid():
+#         user = serializer.validated_data
+#         token, created = Token.objects.get_or_create(user=user)
+#         return Response({
+#             'token': token.key,
+#             'user_id': user.pk,
+#             'username': user.username
+#         })
+#     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# 로그아웃DRF
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def logout_api(request):
+    if request.user.is_authenticated:
+        # 사용자의 토큰 삭제
+        Token.objects.filter(user=request.user).delete()
+        return Response({
+            "message": "로그아웃되었습니다."
+        }, status=status.HTTP_200_OK)
+    return Response({
+        "message": "이미 로그아웃된 상태입니다."
+    }, status=status.HTTP_400_BAD_REQUEST)
 
 
 

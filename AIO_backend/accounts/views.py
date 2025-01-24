@@ -1,30 +1,36 @@
+# accounts/views.py
 from rest_framework import generics, status
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model, logout
 from rest_framework.authtoken.models import Token
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 from .serializers import (
-    UserSignupSerializer, 
+    UserSignupSerializer,
     UserProfileSerializer,
     DeleteAccountSerializer
 )
 
 User = get_user_model()
 
+
 class SignupView(generics.CreateAPIView):
+    """
+    POST /api/accounts/signup/
+    - 회원가입
+    """
     queryset = User.objects.all()
     serializer_class = UserSignupSerializer
-    permission_classes = [AllowAny]  # 회원가입은 인증 안 된 상태에서도 가능
+    permission_classes = [AllowAny]
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
-        # (선택) 가입과 동시에 토큰 발급
+        # 가입과 동시에 Token 발급
         token, _ = Token.objects.get_or_create(user=user)
 
         return Response(
@@ -35,9 +41,14 @@ class SignupView(generics.CreateAPIView):
             },
             status=status.HTTP_201_CREATED
         )
-        
+
+
 class LoginAPIView(APIView):
-    permission_classes = [AllowAny]  # 로그인은 인증 없이 접근 가능
+    """
+    POST /api/accounts/login/
+    - 로그인
+    """
+    permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
         email = request.data.get('email')
@@ -57,15 +68,13 @@ class LoginAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 비밀번호 확인
         if not user.check_password(password):
             return Response(
                 {"success": False, "message": "비밀번호가 일치하지 않습니다."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 여기까지 통과하면 로그인 성공
-        # (옵션) TokenAuthentication을 쓴다면 토큰 발급/조회
+        # 로그인 성공 -> 토큰 발급
         token, created = Token.objects.get_or_create(user=user)
 
         return Response(
@@ -77,50 +86,69 @@ class LoginAPIView(APIView):
             status=status.HTTP_200_OK
         )
 
+
 class LogoutView(generics.GenericAPIView):
+    """
+    POST /api/accounts/logout/
+    - 로그아웃 (Token 삭제)
+    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        # 1) 인증된 사용자(토큰으로 인증)의 Token을 삭제
+        # 현재 사용자의 토큰 삭제
         Token.objects.filter(user=request.user).delete()
-        
-        # 2) (선택) Django 세션 로그아웃(세션 기반도 함께 쓰는 경우)
+        # (선택) Django 세션 로그아웃
         logout(request)
-        
-        # 3) 응답
         return Response({"detail": "Successfully logged out."}, status=status.HTTP_200_OK)
 
 
 class ProfileView(generics.RetrieveAPIView):
+    """
+    GET /api/accounts/profile/
+    - 현재 로그인한 사용자의 프로필 조회
+    """
     permission_classes = [IsAuthenticated]
     serializer_class = UserProfileSerializer
 
     def get_object(self):
         return self.request.user
+
 
 class ProfileUpdateView(generics.UpdateAPIView):
+    """
+    PATCH /api/accounts/profile/update/
+    - 현재 로그인한 사용자의 프로필 수정 (nickname, profile_image 등)
+    """
     permission_classes = [IsAuthenticated]
     serializer_class = UserProfileSerializer
 
+    # 이미지 업로드를 위한 파서
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
     def get_object(self):
         return self.request.user
+
+    # PATCH 메서드를 지원하기 위해 아래 메서드 추가 (부분 수정)
+    def patch(self, request, *args, **kwargs):
+        return self.partial_update(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
+
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
         return Response(serializer.data)
 
+
 class DeleteUserView(APIView):
     """
     POST /api/accounts/delete/
-    Body: { "password": "..." }
-
-    - 토큰 인증 (IsAuthenticated)
-    - 비밀번호 확인
-    - 맞으면 user.delete()
+    {
+        "password": "..."
+    }
+    - 현재 로그인한 사용자 회원탈퇴
     """
     permission_classes = [IsAuthenticated]
 

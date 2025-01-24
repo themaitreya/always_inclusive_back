@@ -1,12 +1,12 @@
+# accounts/urls.py
 from django.urls import path
-# from rest_framework.authtoken.views import obtain_auth_token
 from .views import (
     SignupView,
     LoginAPIView,
     LogoutView,
-    ProfileView, 
-    ProfileUpdateView, 
-    DeleteUserView,
+    ProfileView,
+    ProfileUpdateView,
+    DeleteUserView
 )
 
 urlpatterns = [

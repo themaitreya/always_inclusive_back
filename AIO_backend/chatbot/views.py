@@ -1,121 +1,123 @@
+import os
+import openai
+from dotenv import load_dotenv
+
+from django.http import StreamingHttpResponse
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
-from rest_framework import status
-import os
-from dotenv import load_dotenv
-from langchain_community.document_loaders import TextLoader
+from rest_framework.permissions import IsAuthenticated
+from langchain.chat_models import ChatOpenAI
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_openai import ChatOpenAI
-from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain_core.prompts import ChatPromptTemplate
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.schema import HumanMessage, SystemMessage, AIMessage
+from langchain_community.document_loaders import TextLoader
 
-load_dotenv()
+from .models import ChatMessage
 
-class SimplePassThrough:
-    def invoke(self, inputs, **kwargs):
-        return inputs
-
-class ContextToPrompt:
-    def __init__(self, prompt_template):
-        self.prompt_template = prompt_template
-
-    def invoke(self, inputs):
-        if isinstance(inputs, list):
-            context_text = "\n".join([doc.page_content for doc in inputs])
-        else:
-            context_text = inputs
-
-        formatted_prompt = self.prompt_template.format_messages(
-            context=context_text,
-            question=inputs.get("question", "")
-        )
-        return formatted_prompt
-
-class RetrieverWrapper:
-    def __init__(self, retriever):
-        self.retriever = retriever
-
-    def invoke(self, inputs):
-        if isinstance(inputs, dict):
-            query = inputs.get("question", "")
-        else:
-            query = inputs
-        response_docs = self.retriever.get_relevant_documents(query)
-        return response_docs
+load_dotenv()  # .env에서 OPENAI_API_KEY 등을 가져옴
 
 class ChatbotView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]  # 로그인 사용자만 접근 가능(예시)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        if not openai_api_key:
-            raise ValueError("OPENAI_API_KEY is not set in the environment variables.")
-        
-        self.model = ChatOpenAI(model="gpt-4o")
-        
-        # 각 엔트리를 별도의 문서로 로드
+        self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not self.openai_api_key:
+            raise ValueError("OPENAI_API_KEY is not set in environment.")
+
+        self.chat_llm = ChatOpenAI(
+            openai_api_key=self.openai_api_key,
+            model_name="gpt-4o",
+            streaming=True,
+            temperature=0.7
+        )
+
+        # RAG 세팅
         loader = TextLoader('./chatbot/Merged_details.txt', encoding='UTF8', autodetect_encoding=False)
         videos = loader.load()
-        
-        # 텍스트 분할을 최소화하여 각 문서를 개별적으로 유지
-        # 필요 시, 텍스트 분할기를 제거하거나 큰 청크로 설정
-        recursive_text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,  # 큰 청크로 설정
-            chunk_overlap=100,  # 약간의 오버랩
+
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=100,
             length_function=len,
             is_separator_regex=False,
         )
-        splits = recursive_text_splitter.split_documents(videos)
-        
+        splits = splitter.split_documents(videos)
+
         embeddings = OpenAIEmbeddings(model="text-embedding-ada-002")
-        
+
         if os.path.exists('./db/faiss'):
             self.vectorstore = FAISS.load_local('./db/faiss', embeddings, allow_dangerous_deserialization=True)
         else:
             self.vectorstore = FAISS.from_documents(documents=splits, embedding=embeddings)
             self.vectorstore.save_local('./db/faiss')
-        # self.vectorstore = FAISS.from_documents(documents=splits, embedding=embeddings)
-        
-        self.retriever = self.vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 10})
-        
-        self.contextual_prompt = ChatPromptTemplate.from_messages([
-            ("system", "당신은 제공된 데이터에 기반하여 질문에 답변하는 AI 도우미입니다. 외부 지식이나 정보를 사용하지 말고, 오직 주어진 데이터만을 참고하여 응답하세요. 응답은 한국어로 작성되어야 합니다."),
-            ("user", "데이터 컨텍스트: {context}\n\n질문: {question}\n\n제공된 데이터를 바탕으로 명확하고 구체적인 답변을 제공하세요. 가능한 경우, 요청한 조건에 맞는 후보군을 모두 나열해 주세요.")
-        ])
-        
-        self.rag_chain = {
-            "context": RetrieverWrapper(self.retriever),
-            "prompt": ContextToPrompt(self.contextual_prompt),
-            "llm": self.model
-        }
 
     def post(self, request, *args, **kwargs):
-        email = request.data.get('email')
-        user_message = request.data.get('message')
-        timestamp = request.data.get('timestamp')  # 실제 사용 여부는 선택
-
+        user = request.user
+        user_message = request.data.get('message', '').strip()
         if not user_message:
-            return Response({"error": "message is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "message is required"}, status=400)
 
-        try:
-            bot_response = self._generate_response(user_message)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        ChatMessage.objects.create(user=user, role='user', message=user_message)
 
-        return Response(
-            {"responseMessage": bot_response},
-            status=status.HTTP_200_OK
+        response = StreamingHttpResponse(
+            streaming_content=self.stream_chat(user, user_message),
+            content_type='text/event-stream'
         )
+        response['Cache-Control'] = 'no-cache'
+        response['X-Accel-Buffering'] = 'no'
+        return response
 
-    def _generate_response(self, query):
-        response_docs = self.rag_chain["context"].invoke({"question": query})
-        prompt_messages = self.rag_chain["prompt"].invoke({
-            "context": response_docs,
-            "question": query
-        })
-        response = self.rag_chain["llm"].invoke(prompt_messages)
-        print(response.content)
-        return response.content
+    def stream_chat(self, user, user_message):
+        past_messages = ChatMessage.objects.filter(user=user).order_by('-created_at')[:10]
+        past_messages = reversed(past_messages)
+
+        conversation = []
+        # SystemMessage에서 '\n'과 마크다운, 줄바꿈을 강조
+        conversation.append(SystemMessage(content="""\
+당신은 제공된 데이터에 기반하여 질문에 답변하는 AI입니다.
+특히, 아래 사항을 꼭 지키세요:
+1) 각 항목마다 '**반드시**' 줄바꿈(\n)을 넣어서 구분
+2) 영화 정보를 마크다운 목록 형태(- 또는 번호)로 작성
+3) 답변 마지막에 '즐거운 시청 되세요!'라고 꼭 작성
+
+예시:
+1) 영화 제목
+   - 장르: ...
+   - 평점: ...
+2) 영화 제목
+   - 장르: ...
+   - 평점: ...
+"""))
+
+        for msg in past_messages:
+            if msg.role == 'system':
+                conversation.append(SystemMessage(content=msg.message))
+            elif msg.role == 'assistant':
+                conversation.append(AIMessage(content=msg.message))
+            else:
+                conversation.append(HumanMessage(content=msg.message))
+
+        # RAG
+        docs = self.vectorstore.similarity_search(user_message, k=5)
+        context_text = "\n\n".join([d.page_content for d in docs])
+        conversation.append(
+            SystemMessage(content=f"아래 컨텍스트도 참고:\n{context_text}")
+        )
+        conversation.append(HumanMessage(content=user_message))
+
+        final_answer = []
+
+        for token in self.chat_llm.stream(conversation):
+            chunk_text = token.content
+            if chunk_text:
+                final_answer.append(chunk_text)
+                yield f"data: {chunk_text}\n\n"
+
+        assistant_text = "".join(final_answer).strip()
+        if assistant_text:
+            ChatMessage.objects.create(user=user, role='assistant', message=assistant_text)
+
+        yield "data: [DONE]\n\n"

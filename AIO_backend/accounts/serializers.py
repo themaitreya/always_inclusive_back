@@ -43,14 +43,13 @@ class DeleteAccountSerializer(serializers.Serializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    """
-    사용자 프로필 조회/수정 시 사용하는 직렬화기
-    """
     class Meta:
         model = User
-        # User 모델의 nickname, profile_image 등을 추가로 직렬화
         fields = [
-            'id', 'email', 'nickname', 'profile_image', 
-            'gender', 'age_group'
+            'id', 'email', 'nickname', 
+            'profile_image', 
+            'chatbot_image',  # 추가
+            'gender', 
+            'age_group'       # age_group 필드를 사용
         ]
         read_only_fields = ['id', 'email']

@@ -12,6 +12,44 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# 도메인별 SMTP config
+EMAIL_CONFIGS = {
+    'gmail.com': {
+        'HOST': 'smtp.gmail.com',
+        'PORT': 587,
+        'USER': os.getenv('GMAIL_USER'),
+        'PASSWORD': os.getenv('GMAIL_PASSWORD'),
+        'USE_TLS': True,
+    },
+    'naver.com': {
+        'HOST': 'smtp.naver.com',
+        'PORT': 587,
+        'USER': os.getenv('NAVER_USER'),
+        'PASSWORD': os.getenv('NAVER_PASSWORD'),
+        'USE_TLS': True,
+    },
+    'daum.net': {
+        'HOST': 'smtp.daum.net',
+        'PORT': 465,
+        'USER': os.getenv('DAUM_USER'),
+        'PASSWORD': os.getenv('DAUM_PASSWORD'),
+        'USE_SSL': True,  # 예: 다음은 SSL 465 포트일 수도 있음
+    }
+}
+
+# 기본값(혹은 fallback)
+DEFAULT_EMAIL_CONFIG = {
+    'HOST': 'smtp.gmail.com',
+    'PORT': 587,
+    'USER': os.getenv('GMAIL_USER'),
+    'PASSWORD': os.getenv('GMAIL_PASSWORD'),
+    'USE_TLS': True,
+}
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 

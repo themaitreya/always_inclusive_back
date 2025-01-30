@@ -168,7 +168,7 @@ WSGI_APPLICATION = 'AIO_backend.wsgi.application'
 #     }
 # }
 
-# 준석
+# # 준석
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',  # MariaDB도 mysql 엔진 사용

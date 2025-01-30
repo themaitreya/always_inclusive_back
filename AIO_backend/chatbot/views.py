@@ -6,7 +6,6 @@ from django.http import StreamingHttpResponse
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from langchain.chat_models import ChatOpenAI
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -19,8 +18,6 @@ from .models import ChatMessage
 load_dotenv()  # .env에서 OPENAI_API_KEY 등을 가져옴
 
 class ChatbotView(APIView):
-    permission_classes = [IsAuthenticated]  # 로그인 사용자만 접근 가능(예시)
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.openai_api_key = os.getenv("OPENAI_API_KEY")

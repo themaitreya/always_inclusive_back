@@ -68,6 +68,7 @@ ALLOWED_HOSTS = [
     '127.0.0.1',      
     'localhost',
     '43.201.26.159',
+    '13.209.47.60',
     'whatever-ott.com',
 ]
 
@@ -173,7 +174,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',  # MariaDB도 mysql 엔진 사용
         'NAME': 'ott_project',                   # DB 이름
         'USER': 'root',                     # DB 사용자
-        'PASSWORD': '1234',             # DB 비밀번호
+        'PASSWORD': '3178',             # DB 비밀번호
         'HOST': '127.0.0.1',                   # DB 서버 주소
         'PORT': '3306',                        # DB 포트 (기본 3306)
     }

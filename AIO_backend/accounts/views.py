@@ -244,37 +244,44 @@ class PasswordResetVerifyCodeView(APIView):
 class PasswordResetConfirmView(APIView):
     """
     POST /api/accounts/password_reset/confirm/
-    request: {"new_password": "새 비밀번호" }
-    response: {"success": True/False, "message": "..."}
-    (실무에서는 code도 함께 받아서 재검증 후 처리하는 방식을 추천)
+    request: {"code": "인증코드", "new_password": "새 비밀번호"}
     """
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
+        code = request.data.get('code')  # ★ 코드 추가
         new_password = request.data.get('new_password')
 
-        # (실무에선 code 또는 세션 토큰을 통해 "어느 사용자인지" 식별해야 함)
-        # 여기서는 편의상 reset_code가 유효한 User가 1명 있다고 가정
-        # → 실제로는 verify_code 단계에서 세션/임시토큰을 발급하여 client와 주고받는 것이 안전함
+        # code와 새 비밀번호 모두 필요
+        if not code or not new_password:
+            return Response(
+                {"success": False, "message": "인증코드와 새 비밀번호가 모두 필요합니다."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # code와 일치하는 유저 찾기
         try:
-            user = User.objects.get(reset_code__isnull=False)  # 코드가 세팅되어 있는 유저
+            user = User.objects.get(reset_code=code)
         except User.DoesNotExist:
-            return Response({"success": False, "message": "비밀번호를 재설정할 수 없습니다(인증코드가 유효하지 않음)."},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"success": False, "message": "올바르지 않은 코드입니다."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except User.MultipleObjectsReturned:
+            return Response(
+                {"success": False, "message": "동일한 코드가 여러 사용자에게 할당되어 있습니다."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        if not user.check_reset_code(user.reset_code):
-            return Response({"success": False, "message": "인증코드가 만료되었거나 유효하지 않습니다."},
-                            status=status.HTTP_400_BAD_REQUEST)
+        # 만료 시간 체크
+        if not user.check_reset_code(code):
+            return Response(
+                {"success": False, "message": "인증코드가 만료되었거나 일치하지 않습니다."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        if not new_password:
-            return Response({"success": False, "message": "새 비밀번호를 입력해주세요."},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        # 1) 새 비밀번호 설정
+        # 새 비밀번호 설정
         user.set_password(new_password)
-        user.save()
-
-        # 2) 인증 코드 초기화
         user.clear_reset_code()
 
         return Response({"success": True, "message": "비밀번호가 성공적으로 재설정되었습니다."},
